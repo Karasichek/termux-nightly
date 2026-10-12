@@ -71,9 +71,7 @@ public class NotificationUtils {
         Notification.Builder builder = new Notification.Builder(context);
         builder.setContentTitle(title);
         builder.setContentText(notificationText);
-        if (notificationBigText != null) {
-            builder.setStyle(new Notification.BigTextStyle().bigText(notificationBigText));
-        }
+        builder.setStyle(new Notification.BigTextStyle().bigText(notificationBigText));
         builder.setContentIntent(contentIntent);
         builder.setDeleteIntent(deleteIntent);
 

@@ -2,11 +2,10 @@ apply plugin: 'com.android.library'
 apply plugin: 'maven-publish'
 
 android {
-    namespace "com.termux.view"
     compileSdkVersion project.properties.compileSdkVersion.toInteger()
 
     dependencies {
-        implementation "androidx.annotation:annotation:1.9.0"
+        implementation "androidx.annotation:annotation:1.3.0"
         api project(":terminal-emulator")
     }
 
@@ -27,14 +26,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-
-    publishing {
-        multipleVariants {
-            withSourcesJar()
-            withJavadocJar()
-            allVariants()
-        }
-    }
 }
 
 dependencies {
@@ -43,7 +34,7 @@ dependencies {
 
 task sourceJar(type: Jar) {
     from android.sourceSets.main.java.srcDirs
-    archiveClassifier = "sources"
+    classifier "sources"
 }
 
 afterEvaluate {
@@ -51,7 +42,7 @@ afterEvaluate {
         publications {
             // Creates a Maven publication called "release".
             release(MavenPublication) {
-                from components.default
+                from components.release
                 groupId = 'com.termux'
                 artifactId = 'terminal-view'
                 version = '0.118.0'
@@ -60,4 +51,3 @@ afterEvaluate {
         }
     }
 }
-
