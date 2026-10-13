@@ -28,7 +28,21 @@ jobs:
           java-version: '11'
 
       - name: Install Android SDK components
-        run: sdkmanager --install "platforms;android-31" "build-tools;31.0.0" "ndk;23.1.7779620"
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK_ROOT" ]; then
+            echo "ANDROID_HOME and ANDROID_SDK_ROOT are not set" >&2
+            exit 1
+          fi
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          fi
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager not found under $SDK_ROOT" >&2
+            exit 1
+          fi
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "platforms;android-31" "build-tools;31.0.0" "ndk;23.1.7779620"
 
       - name: Build APKs
         shell: bash {0}
