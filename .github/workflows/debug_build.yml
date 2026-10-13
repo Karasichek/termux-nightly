@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - '**'
+  workflow_dispatch:
   pull_request:
     branches:
       - master
@@ -14,13 +15,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package_variant: [ apt-android-7, apt-android-5 ]
+        package_variant: [ apt-android-7 ]
 
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
 
-      - name: Setup Java 11
+      - name: Setup Java 17 for Android SDK Manager
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK components
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK_ROOT" ]; then
+            echo "ANDROID_HOME and ANDROID_SDK_ROOT are not set" >&2
+            exit 1
+          fi
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+          fi
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager not found under $SDK_ROOT" >&2
+            exit 1
+          fi
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" --install "platforms;android-31" "build-tools;31.0.0" "ndk;23.1.7779620"
+
+      - name: Setup Java 11 for Gradle
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -65,7 +89,7 @@ jobs:
           fi
 
           echo "Validating APKs"
-          for abi in universal arm64-v8a armeabi-v7a x86_64 x86; do
+          for abi in universal arm64-v8a x86_64 x86; do
             if ! test -f "$APK_DIR_PATH/${APK_BASENAME_PREFIX}_$abi.apk"; then
               files_found="$(ls "$APK_DIR_PATH")"
               exit_on_error "Failed to find built APK at '$APK_DIR_PATH/${APK_BASENAME_PREFIX}_$abi.apk'. Files found: "$'\n'"$files_found"
@@ -76,7 +100,6 @@ jobs:
           if ! (cd "$APK_DIR_PATH"; sha256sum \
             "${APK_BASENAME_PREFIX}_universal.apk" \
             "${APK_BASENAME_PREFIX}_arm64-v8a.apk" \
-            "${APK_BASENAME_PREFIX}_armeabi-v7a.apk" \
             "${APK_BASENAME_PREFIX}_x86_64.apk" \
             "${APK_BASENAME_PREFIX}_x86.apk" \
             > "${APK_BASENAME_PREFIX}_sha256sums"); then
@@ -97,14 +120,6 @@ jobs:
           name: ${{ env.APK_BASENAME_PREFIX }}_arm64-v8a
           path: |
             ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_arm64-v8a.apk
-            ${{ env.APK_DIR_PATH }}/output-metadata.json
-
-      - name: Attach armeabi-v7a APK file
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.APK_BASENAME_PREFIX }}_armeabi-v7a
-          path: |
-            ${{ env.APK_DIR_PATH }}/${{ env.APK_BASENAME_PREFIX }}_armeabi-v7a.apk
             ${{ env.APK_DIR_PATH }}/output-metadata.json
 
       - name: Attach x86_64 APK file
