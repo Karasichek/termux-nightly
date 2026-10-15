@@ -9,6 +9,7 @@ import android.graphics.Point;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContract;
@@ -255,6 +256,8 @@ public class TermuxBackgroundManager {
     public void updateBackground(boolean forced) {
         if (!mActivity.isVisible()) return;
 
+        updateToolbarBackground();
+
         if (mActivity.getPreferences().isBackgroundImageEnabled()) {
 
             Drawable drawable = mActivity.getWindow().getDecorView().getBackground();
@@ -269,8 +272,6 @@ public class TermuxBackgroundManager {
         } else {
             updateBackgroundColor();
         }
-
-        updateToolbarBackground();
     }
 
     /**
@@ -339,11 +340,22 @@ public class TermuxBackgroundManager {
         });
     }
 
-    /**
-     * Set backgroudn of the ExtraKey toolbar and buttons.
-     * Must be called when background preference is changed.
-     */
+    /** Set background of the session drawer, ExtraKeys toolbar, and buttons. */
     public void updateToolbarBackground() {
+        View drawer = mActivity.findViewById(R.id.left_drawer);
+        if (drawer != null) {
+            int drawerBackgroundColor = ThemeUtils.getSystemAttrColor(
+                mActivity, R.attr.termuxActivityDrawerBackground, Color.BLACK);
+            if (mPreferences.isBackgroundImageEnabled()) {
+                int overlayColor = mActivity.getProperties().getBackgroundOverlayColor();
+                drawerBackgroundColor = Color.argb(Color.alpha(overlayColor),
+                    Color.red(drawerBackgroundColor), Color.green(drawerBackgroundColor),
+                    Color.blue(drawerBackgroundColor));
+            }
+            drawer.setBackgroundColor(drawerBackgroundColor);
+            mActivity.termuxSessionListNotifyUpdated();
+        }
+
         ViewPager viewPager = mActivity.getTerminalToolbarViewPager();
         ExtraKeysView extraKeysView = mActivity.getExtraKeysView();
 
