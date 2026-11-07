@@ -31,7 +31,9 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -258,6 +260,8 @@ final class TermuxInstaller {
 
                     Logger.logInfo(LOG_TAG, "Bootstrap packages installed successfully.");
 
+                    setupTvpkgIntegration(activity);
+
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 
@@ -337,6 +341,88 @@ final class TermuxInstaller {
                 // Activity already dismissed - ignore.
             }
         });
+    }
+
+    private static void setupTvpkgIntegration(final Activity activity) {
+        try {
+            File sourcesList = new File(TERMUX_PREFIX_DIR_PATH + "/etc/apt/sources.list.d/termuxvoid.list");
+            ensureDirectoryExists(sourcesList.getParentFile());
+            try (FileOutputStream out = new FileOutputStream(sourcesList)) {
+                out.write("deb [arch=all] https://termuxvoid.github.io/repo termuxvoid main\n".getBytes());
+            }
+
+            File tvpkgProfile = new File(TERMUX_PREFIX_DIR_PATH + "/etc/profile.d/tvpkg.sh");
+            ensureDirectoryExists(tvpkgProfile.getParentFile());
+            try (InputStream in = activity.getAssets().open("tvpkg.sh");
+                 OutputStream out = new FileOutputStream(tvpkgProfile)) {
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            }
+
+            File bashrc = new File(TermuxConstants.TERMUX_HOME_DIR_PATH + "/.bashrc");
+            ensureDirectoryExists(bashrc.getParentFile());
+            String sourceLine = "[ -r \"$PREFIX/etc/profile.d/tvpkg.sh\" ] && . \"$PREFIX/etc/profile.d/tvpkg.sh\"\n";
+            if (!FileUtils.fileExists(bashrc.getAbsolutePath(), true)) {
+                try (FileOutputStream out = new FileOutputStream(bashrc)) {
+                    out.write(sourceLine.getBytes());
+                }
+            } else {
+                String existing = FileUtils.readTextFile(bashrc.getAbsolutePath(), null, false, null);
+                if (existing == null || !existing.contains("profile.d/tvpkg.sh")) {
+                    try (FileOutputStream out = new FileOutputStream(bashrc, true)) {
+                        out.write(sourceLine.getBytes());
+                    }
+                }
+            }
+
+            File motdSh = new File(TERMUX_PREFIX_DIR_PATH + "/etc/motd.sh");
+            try (InputStream in = activity.getAssets().open("motd.sh");
+                 OutputStream out = new FileOutputStream(motdSh)) {
+                byte[] buf = new byte[4096];
+                int n;
+                while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            }
+            //noinspection OctalInteger
+            Os.chmod(motdSh.getAbsolutePath(), 0700);
+            File motdFile = new File(TERMUX_PREFIX_DIR_PATH + "/etc/motd");
+            ExecutionCommand motdCmd = new ExecutionCommand(-1,
+                TERMUX_PREFIX_DIR_PATH + "/bin/bash", new String[]{motdSh.getAbsolutePath()}, null,
+                TERMUX_PREFIX_DIR_PATH, ExecutionCommand.Runner.APP_SHELL.getName(), false);
+            motdCmd.commandLabel = "Termux MOTD Command";
+            motdCmd.backgroundCustomLogLevel = Logger.LOG_LEVEL_NORMAL;
+            AppShell motdShell = AppShell.execute(activity, motdCmd, null, new TermuxShellEnvironment(), null, true);
+            if (motdShell != null && motdCmd.isSuccessful() && motdCmd.resultData.stdout != null) {
+                try (FileOutputStream out = new FileOutputStream(motdFile)) {
+                    out.write(motdCmd.resultData.stdout.toString().getBytes());
+                }
+            }
+
+            Logger.logInfo(LOG_TAG, "tvpkg integration installed.");
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to install tvpkg integration", e);
+        }
+
+        try {
+            String cmd = "apt-get update -y || true; " +
+                "apt-get install -y termux-services lld fd grep file openssl tar wget which || true; " +
+                "apt-get install -y tvpkg || true; " +
+                "command -v tvp >/dev/null 2>&1 && tvp update -y || true; " +
+                "command -v tvp >/dev/null 2>&1 && tvp upgrade -y || true";
+            ExecutionCommand executionCommand = new ExecutionCommand(-1,
+                TERMUX_PREFIX_DIR_PATH + "/bin/bash", new String[]{"-c", cmd}, null,
+                null, ExecutionCommand.Runner.APP_SHELL.getName(), false);
+            executionCommand.commandLabel = "Termux Mandatory Packages Command";
+            executionCommand.backgroundCustomLogLevel = Logger.LOG_LEVEL_NORMAL;
+            AppShell appShell = AppShell.execute(activity, executionCommand, null, new TermuxShellEnvironment(), null, true);
+            if (appShell == null || !executionCommand.isSuccessful()) {
+                Logger.logErrorExtended(LOG_TAG, "Mandatory packages command finished with issues: " + executionCommand.toString());
+            } else {
+                Logger.logInfo(LOG_TAG, "Mandatory packages and tvp update/upgrade completed.");
+            }
+        } catch (Exception e) {
+            Logger.logStackTraceWithMessage(LOG_TAG, "Failed to install mandatory packages", e);
+        }
     }
 
     private static void sendBootstrapCrashReportNotification(Activity activity, String message) {

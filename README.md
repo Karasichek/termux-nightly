@@ -11,7 +11,7 @@
 
 Note that this repository is for the app itself (the user interface and the terminal emulation). For the packages installable inside the app, see [termux/termux-packages](https://github.com/termux/termux-packages).
 
-Quick how-to about Termux package management is available at [Package Management](https://github.com/termux/termux-packages/wiki/Package-Management). It also has info on how to fix **`repository is under maintenance or down`** errors when running `apt` or `pkg` commands.
+This fork uses [tvpkg](https://github.com/termuxvoid/tvpkg) in place of `pkg` (the termuxvoid repo is added automatically on fresh install). `pkg` is routed to tvpkg when installed, with fallback to the original tool for unsupported subcommands (e.g. `autoremove`). `apt`/`apt-get` remain unchanged. See [Package Management](https://github.com/termux/termux-packages/wiki/Package-Management) for repo maintenance and troubleshooting.
 
 **We are looking for Termux Android application maintainers.**
 
